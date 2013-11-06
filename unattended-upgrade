@@ -722,7 +722,8 @@ def dpkg_conffile_prompt():
 
 def rewind_cache(cache, pkgs_to_upgrade):
     " set the cache back to the state with packages_to_upgrade "
-    cache.clear(pkgs_to_upgrade)
+    for pkg in pkgs_to_upgrade:
+        cache.adjust_candidate_version(pkg)
     for pkg2 in pkgs_to_upgrade:
         if pkg2.is_installed:
             pkg2.mark_upgrade(from_user=False)
