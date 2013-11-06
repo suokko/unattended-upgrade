@@ -394,7 +394,7 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
                 continue
             # double check that we are not running into side effects like
             # what could have been caused LP: #1020680
-            if not check_changes_for_sanity(cache, allowed_origins, blacklist):
+            if not check_changes_for_sanity(cache, cache, allowed_origins, blacklist):
                 logging.error(
                     u"Internal error while building a minimal partition."
                     "Cache has not allowed changes")
@@ -463,32 +463,36 @@ def is_pkgname_in_blacklist(pkgname, blacklist):
             return True
     return False
 
-
-def check_changes_for_sanity(cache, allowed_origins, blacklist):
+def check_pkg_change_for_sanity(pkg, allowed_origins, blacklist):
+    if pkg.marked_delete or pkg.is_inst_broken:
+        logging.debug(u"pkg '%s' now marked delete" % pkg.name)
+        return False
+    if pkg.marked_install or pkg.marked_upgrade:
+        if not is_allowed_origin(pkg.candidate, allowed_origins):
+            logging.debug(u"pkg '%s' not in allowed origin" % pkg.name)
+            return False
+        if is_pkgname_in_blacklist(pkg.name, blacklist):
+            return False
+        if pkg._pkg.selected_state == apt_pkg.SELSTATE_HOLD:
+            logging.debug(u"pkg '%s' is on hold" % pkg.name)
+            return False
+        # check if the package is unsafe to upgrade unattended
+        ignore_require_restart = apt_pkg.config.find_b(
+            "Unattended-Upgrade::IgnoreAppsRequireRestart", False)
+        upgrade_requires = pkg.candidate.record.get("Upgrade-Requires")
+        if (pkg.marked_upgrade and ignore_require_restart is False and
+                upgrade_requires == "app-restart"):
+            logging.debug(u"pkg '%s' requires app-restart, not safe to "
+                          "upgrade unattended")
+            return False
+    return True
+ 
+def check_changes_for_sanity(cache, pkglist, allowed_origins, blacklist):
     if cache._depcache.broken_count != 0:
         return False
-    for pkg in cache:
-        if pkg.marked_delete:
-            logging.debug(u"pkg '%s' now marked delete" % pkg.name)
+    for pkg in pkglist:
+        if not check_pkg_change_for_sanity(pkg, allowed_origins, blacklist):
             return False
-        if pkg.marked_install or pkg.marked_upgrade:
-            if not is_allowed_origin(pkg.candidate, allowed_origins):
-                logging.debug(u"pkg '%s' not in allowed origin" % pkg.name)
-                return False
-            if is_pkgname_in_blacklist(pkg.name, blacklist):
-                return False
-            if pkg._pkg.selected_state == apt_pkg.SELSTATE_HOLD:
-                logging.debug(u"pkg '%s' is on hold" % pkg.name)
-                return False
-            # check if the package is unsafe to upgrade unattended
-            ignore_require_restart = apt_pkg.config.find_b(
-                "Unattended-Upgrade::IgnoreAppsRequireRestart", False)
-            upgrade_requires = pkg.candidate.record.get("Upgrade-Requires")
-            if (pkg.marked_upgrade and ignore_require_restart is False and
-                    upgrade_requires == "app-restart"):
-                logging.debug(u"pkg '%s' requires app-restart, not safe to "
-                              "upgrade unattended")
-                return False
     return True
 
 
@@ -952,7 +956,7 @@ def main(options, rootdir=""):
                 is_allowed_origin(pkg.candidate, allowed_origins)):
             try:
                 pkg.mark_upgrade()
-                if check_changes_for_sanity(cache, allowed_origins,
+                if check_changes_for_sanity(cache, cache, allowed_origins,
                                             blacklisted_pkgs):
                     # add to packages to upgrade
                     pkgs_to_upgrade.append(pkg)
@@ -1048,7 +1052,7 @@ def main(options, rootdir=""):
             for pkg in old_pkgs_to_upgrade:
                 logging.debug(u"Checking (blacklist): %s" % (pkg.name))
                 pkg.mark_upgrade()
-                if check_changes_for_sanity(cache, allowed_origins,
+                if check_changes_for_sanity(cache, cache, allowed_origins,
                                             blacklisted_pkgs):
                     pkgs_to_upgrade.append(pkg)
                 else:
