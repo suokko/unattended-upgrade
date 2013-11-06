@@ -1033,6 +1033,9 @@ def main(options, rootdir=""):
     if cache._depcache.broken_count > 0:
         print(_("Cache has broken packages, exiting"))
         logging.error(_(u"Cache has broken packages, exiting"))
+        if not options.dry_run:
+            send_summary_mail(
+                pkgs, False, pkgs_kept_back, mem_log, logfile_dpkg)
         sys.exit(1)
     # speed things up with latest apt
     actiongroup = apt_pkg.ActionGroup(cache._depcache)
@@ -1051,6 +1054,9 @@ def main(options, rootdir=""):
         if options.debug:
             logging.exception(u"Exception happened during upgrade selections")
         logging.error(_(u"Failed to select packages for upgrade: %s") % str(e))
+        if not options.dry_run:
+            send_summary_mail(
+                pkgs, False, pkgs_kept_back, mem_log, logfile_dpkg)
         sys.exit(1)
 
     changes = cache.get_changes();
@@ -1096,12 +1102,18 @@ def main(options, rootdir=""):
                       item.desc_uri)
                 logging.error(_(u"The URI '%s' failed to download, aborting") %
                               item.desc_uri)
+                if not options.dry_run:
+                    send_summary_mail(
+                        pkgs, False, pkgs_kept_back, mem_log, logfile_dpkg)
                 sys.exit(1)
             if not os.path.exists(item.destfile):
                 print(_("Download finished, but file '%s' not there?!?" %
                         item.destfile))
                 logging.error(u"Download finished, but file '%s' not "
                               "there?!?" % item.destfile)
+                if not options.dry_run:
+                    send_summary_mail(
+                        pkgs, False, pkgs_kept_back, mem_log, logfile_dpkg)
                 sys.exit(1)
             if not item.is_trusted:
                 blacklisted_pkgs.append(pkgname_from_deb(item.destfile))
@@ -1135,6 +1147,9 @@ def main(options, rootdir=""):
                 if options.debug:
                     logging.exception(u"Exception happened during conffile blacklist removal")
                 logging.error(_(u"Failed to remove conffile from upgrade list: %s") % str(e))
+                if not options.dry_run:
+                    send_summary_mail(
+                        pkgs, False, pkgs_kept_back, mem_log, logfile_dpkg)
                 sys.exit(1)
     else:
         logging.debug(u"dpkg is configured not to cause conffile prompts")
