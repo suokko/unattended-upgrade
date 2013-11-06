@@ -719,10 +719,13 @@ def rewind_cache(cache, pkgs_to_upgrade):
     for pkg in pkgs_to_upgrade:
         cache.adjust_candidate_version(pkg)
     for pkg2 in pkgs_to_upgrade:
-        if pkg2.is_installed:
-            pkg2.mark_upgrade(from_user=False)
-        else:
-            pkg2.mark_install(from_user=False)
+        pkg2.mark_install(auto_fix=False, auto_inst=False, from_user=False)
+    if cache.broken_count > 0:
+        resolver = apt.cache.ProblemResolver(cache)
+        for pkg in pkgs_to_upgrade:
+            resolver.clear(pkg)
+            resolver.protect(pkg)
+        resolver.resolve()
 
 
 def host():
