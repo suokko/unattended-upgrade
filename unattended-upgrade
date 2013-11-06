@@ -366,6 +366,28 @@ def upgrade_normal(cache, pkgs_to_upgrade, logfile_dpkg, verbose):
                       logfile_dpkg)
     return res
 
+def clear_changes_from_cache(cache, changes, resolver):
+    for pkg in changes:
+        resolver.clear(pkg)
+        pkg.mark_protected(False)
+        if pkg.is_installed:
+            pkg.mark_keep()
+        else:
+            pkg.mark_delete(auto_fix=False)
+
+    if (cache.broken_count > 0 or
+            cache.install_count > 0 or
+            cache.delete_count > 0):
+        for pkg in cache.get_changes():
+            logging.debug(u"pkg: %s, %s" % (pkg.name, ("install" if pkg.marked_install else
+                "delete" if pkg.marked_delete else
+                "keep" if pkg.marked_keep else
+                "reinstall" if pkg.marked_reinstall else
+                "upgrade" if pkg.marked_upgrade else
+                "unknown") + (" broken" if pkg.is_inst_broken else "")))
+        raise Exception("Failed to unroll changes from cachee."
+                " There is %d broken, %d to install, %d to keep and %d to delete packages." %
+                (cache.broken_count, cache.install_count, cache.keep_count, cache.delete_count))
 
 def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
                              logfile_dpkg="", verbose=False):
@@ -381,28 +403,43 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
 
     # to upgrade contains the package names
     to_upgrade = set(pkgs_to_upgrade)
+
+    partitions = {}
+
+    # clear changes from caches
+    changes = cache.get_changes()
+    resolver = apt.cache.ProblemResolver(cache)
+    clear_changes_from_cache(cache, changes, resolver)
+
+    for pkgname in to_upgrade:
+        if SIGNAL_STOP_REQUEST:
+            logging.warn(u"SIGNAL received, stopping")
+            return True
+        pkg = cache[pkgname]
+        if pkg.is_upgradable:
+            pkg.mark_upgrade(from_user=False)
+        elif not pkg.is_installed:
+            pkg.mark_install(from_user=False)
+        else:
+            continue
+
+        pkgchanges = cache.get_changes()
+        if check_changes_for_sanity(cache, pkgchanges, allowed_origins, blacklist):
+            changes = [pkg.name for pkg in pkgchanges]
+            logging.debug(u"%s has changes: %s" % (pkgname, ", ".join(changes)))
+            partitions[pkgname] = changes
+        else:
+            logging.info(_(u"%s doesn't generate sane changeset") % pkg.name)
+
+        clear_changes_from_cache(cache, pkgchanges, resolver)
+
     while True:
         # find smallest set
         smallest_partition = to_upgrade
-        for pkgname in to_upgrade:
-            if SIGNAL_STOP_REQUEST:
-                logging.warn(u"SIGNAL received, stopping")
-                return True
-            pkg = cache[pkgname]
-            if pkg.is_upgradable:
-                pkg.mark_upgrade()
-            elif not pkg.is_installed:
-                pkg.mark_install()
-            else:
-                continue
-            # double check that we are not running into side effects like
-            # what could have been caused LP: #1020680
-            if not check_changes_for_sanity(cache, cache, allowed_origins, blacklist):
-                logging.error(
-                    u"Internal error while building a minimal partition."
-                    "Cache has not allowed changes")
-                return False
-            changes = [pkg.name for pkg in cache.get_changes()]
+        if SIGNAL_STOP_REQUEST:
+            logging.warn(u"SIGNAL received, stopping")
+            return True
+        for pkgname, changes in partitions.iteritems():
             if len(changes) == 1:
                 logging.debug(u"found leaf package %s" % pkg.name)
                 smallest_partition = changes
@@ -411,7 +448,6 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
                 logging.debug(u"found partition of size %s (%s)" % (
                     len(changes), changes))
                 smallest_partition = changes
-            cache.clear(cache)
 
         # write progress log information
         if len(pkgs_to_upgrade) > 0:
@@ -425,6 +461,15 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
         # apply changes
         logging.debug(u"applying set %s" % smallest_partition)
         rewind_cache(cache, [cache[name] for name in smallest_partition])
+
+        # double check that we are not running into side effects like
+        # what could have been caused LP: #1020680
+        if (len(smallest_partition) == len(to_upgrade) and 
+                not check_changes_for_sanity(cache, cache.get_changes(), allowed_origins, blacklist)):
+            logging.error(
+                u"Internal error while building a minimal partition."
+                "Cache has not allowed changes")
+            return False
 
         try:
             iprogress = LogInstallProgress(logfile_dpkg, verbose)
@@ -446,6 +491,17 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
         if len(to_upgrade) == 0:
             logging.info(_(u"All upgrades installed"))
             break
+        #Remove installed packages from partitions
+        smallest_partition = copy.copy(smallest_partition)
+        for pkgname in partitions.keys():
+            for upgraded in smallest_partition:
+                try:
+                    partitions[pkgname].remove(upgraded)
+                except Exception, e:
+                    pass
+            if len(partitions[pkgname]) == 0:
+                del partitions[pkgname]
+
     return True
 
 
@@ -667,7 +723,10 @@ def rewind_cache(cache, pkgs_to_upgrade):
     " set the cache back to the state with packages_to_upgrade "
     cache.clear(pkgs_to_upgrade)
     for pkg2 in pkgs_to_upgrade:
-        pkg2.mark_upgrade(from_user=False)
+        if pkg2.is_installed:
+            pkg2.mark_upgrade(from_user=False)
+        else:
+            pkg2.mark_install(from_user=False)
 
 
 def host():
