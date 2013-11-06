@@ -107,14 +107,14 @@ class UnattendedUpgradesCache(apt.Cache):
                 # ignore versions that the user marked with priority < 0
                 # (and ensure we have a python-apt that supports this)
                 if hasattr(ver, "policy_priority") and ver.policy_priority < 0:
-                    logging.debug("ignoring ver '%s' with priority < 0" % ver)
+                    logging.debug(u"ignoring ver '%s' with priority < 0" % ver)
                     continue
                 if is_allowed_origin(ver, self.allowed_origins):
                     # leave as soon as we have the highest new candidate
                     new_cand = ver
                     break
             if new_cand and new_cand != pkg.candidate:
-                logging.debug("adjusting candidate version: '%s'" % new_cand)
+                logging.debug(u"adjusting candidate version: '%s'" % new_cand)
                 pkg.candidate = new_cand
 
 
@@ -198,7 +198,7 @@ class LogInstallProgress(apt.progress.base.InstallProgress):
                 select.select([self.output_logfd], [], [], 0)
             except select.error as e:
                 if e.errno != errno.EINTR:
-                    logging.exception("select failed")
+                    logging.exception(u"select failed")
             # output to stdout in verbose mode only
             os.write(1, os.read(self.output_logfd, 1024))
 
@@ -244,7 +244,7 @@ def is_dpkg_journal_dirty():
 
 
 def signal_handler(signal, frame):
-    logging.warn("SIGUSR1 received, will stop")
+    logging.warn(u"SIGUSR1 received, will stop")
     global SIGNAL_STOP_REQUEST
     SIGNAL_STOP_REQUEST = True
 
@@ -304,7 +304,7 @@ def match_whitelist_string(whitelist, origin):
     """
     whitelist = whitelist.strip()
     if whitelist == "":
-        logging.warn("empty match string matches nothing")
+        logging.warn(u"empty match string matches nothing")
         return False
     res = True
     # make "\," the html quote equivalent
@@ -335,7 +335,7 @@ def match_whitelist_string(whitelist, origin):
             raise UnknownMatcherError(
                 "Unknown whitelist entry for macher '%s' (token '%s')" % (
                     what, token))
-        logging.debug("matching '%s'='%s' against '%s'" % (
+        logging.debug(u"matching '%s'='%s' against '%s'" % (
                       what, value, origin))
     return res
 
@@ -350,13 +350,13 @@ def upgrade_normal(cache, pkgs_to_upgrade, logfile_dpkg, verbose):
     except SystemError as e:
         error = e
         if verbose:
-            logging.exception("Exception happened during upgrade.")
+            logging.exception(u"Exception happened during upgrade.")
     if res:
-        logging.info(_("All upgrades installed"))
+        logging.info(_(u"All upgrades installed"))
     else:
-        logging.error(_("Installing the upgrades failed!"))
-        logging.error(_("error message: '%s'") % error)
-        logging.error(_("dpkg returned a error! See '%s' for details") %
+        logging.error(_(u"Installing the upgrades failed!"))
+        logging.error(_(u"error message: '%s'") % error)
+        logging.error(_(u"dpkg returned a error! See '%s' for details") %
                       logfile_dpkg)
     return res
 
@@ -380,7 +380,7 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
         smallest_partition = to_upgrade
         for pkgname in to_upgrade:
             if SIGNAL_STOP_REQUEST:
-                logging.warn("SIGNAL received, stopping")
+                logging.warn(u"SIGNAL received, stopping")
                 return True
             pkg = cache[pkgname]
             if pkg.is_upgradable:
@@ -393,16 +393,16 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
             # what could have been caused LP: #1020680
             if not check_changes_for_sanity(cache, allowed_origins, blacklist):
                 logging.error(
-                    "Internal error while building a minimal partition."
+                    u"Internal error while building a minimal partition."
                     "Cache has not allowed changes")
                 return False
             changes = [pkg.name for pkg in cache.get_changes()]
             if len(changes) == 1:
-                logging.debug("found leaf package %s" % pkg.name)
+                logging.debug(u"found leaf package %s" % pkg.name)
                 smallest_partition = changes
                 break
             if len(changes) < len(smallest_partition):
-                logging.debug("found partition of size %s (%s)" % (
+                logging.debug(u"found partition of size %s (%s)" % (
                     len(changes), changes))
                 smallest_partition = changes
             cache.clear()
@@ -417,7 +417,7 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
                                   percent=percent,
                                   status="")
         # apply changes
-        logging.debug("applying set %s" % smallest_partition)
+        logging.debug(u"applying set %s" % smallest_partition)
         rewind_cache(cache, [cache[name] for name in smallest_partition])
 
         try:
@@ -429,16 +429,16 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
             cache.open()
         except Exception as e:
             if verbose:
-                logging.exception("Exception happened during upgrade.")
-            logging.error(_("Installing the upgrades failed!"))
-            logging.error(_("error message: '%s'") % e)
-            logging.error(_("dpkg returned a error! See '%s' for details") %
+                logging.exception(u"Exception happened during upgrade.")
+            logging.error(_(u"Installing the upgrades failed!"))
+            logging.error(_(u"error message: '%s'") % e)
+            logging.error(_(u"dpkg returned a error! See '%s' for details") %
                           logfile_dpkg)
             return False
         to_upgrade = to_upgrade - set(smallest_partition)
-        logging.debug("left to upgrade %s" % to_upgrade)
+        logging.debug(u"left to upgrade %s" % to_upgrade)
         if len(to_upgrade) == 0:
-            logging.info(_("All upgrades installed"))
+            logging.info(_(u"All upgrades installed"))
             break
     return True
 
@@ -456,7 +456,7 @@ def is_allowed_origin(ver, allowed_origins):
 def is_pkgname_in_blacklist(pkgname, blacklist):
     for blacklist_regexp in blacklist:
         if re.match(blacklist_regexp, pkgname):
-            logging.debug("skipping blacklisted package '%s'" % pkgname)
+            logging.debug(u"skipping blacklisted package '%s'" % pkgname)
             return True
     return False
 
@@ -466,16 +466,16 @@ def check_changes_for_sanity(cache, allowed_origins, blacklist):
         return False
     for pkg in cache:
         if pkg.marked_delete:
-            logging.debug("pkg '%s' now marked delete" % pkg.name)
+            logging.debug(u"pkg '%s' now marked delete" % pkg.name)
             return False
         if pkg.marked_install or pkg.marked_upgrade:
             if not is_allowed_origin(pkg.candidate, allowed_origins):
-                logging.debug("pkg '%s' not in allowed origin" % pkg.name)
+                logging.debug(u"pkg '%s' not in allowed origin" % pkg.name)
                 return False
             if is_pkgname_in_blacklist(pkg.name, blacklist):
                 return False
             if pkg._pkg.selected_state == apt_pkg.SELSTATE_HOLD:
-                logging.debug("pkg '%s' is on hold" % pkg.name)
+                logging.debug(u"pkg '%s' is on hold" % pkg.name)
                 return False
             # check if the package is unsafe to upgrade unattended
             ignore_require_restart = apt_pkg.config.find_b(
@@ -483,7 +483,7 @@ def check_changes_for_sanity(cache, allowed_origins, blacklist):
             upgrade_requires = pkg.candidate.record.get("Upgrade-Requires")
             if (pkg.marked_upgrade and ignore_require_restart is False and
                     upgrade_requires == "app-restart"):
-                logging.debug("pkg '%s' requires app-restart, not safe to "
+                logging.debug(u"pkg '%s' requires app-restart, not safe to "
                               "upgrade unattended")
                 return False
     return True
@@ -496,7 +496,7 @@ def pkgname_from_deb(debfile):
         sections = apt_pkg.TagSection(control)
         return sections["Package"]
     except (IOError, SystemError) as e:
-        logging.error("failed to read deb file '%s' (%s)" % (debfile, e))
+        logging.error(u"failed to read deb file '%s' (%s)" % (debfile, e))
         # dumb fallback
         return debfile.split("_")[0]
 
@@ -516,7 +516,7 @@ def get_md5sum_for_file_in_deb(deb_file, conf_file):
 
 # prefix is *only* needed for the build-in tests
 def conffile_prompt(destFile, prefix=""):
-    logging.debug("check_conffile_prompt('%s')" % destFile)
+    logging.debug(u"check_conffile_prompt('%s')" % destFile)
     pkgname = pkgname_from_deb(destFile)
 
     # get the conffiles for the /var/lib/dpkg/status file
@@ -525,7 +525,7 @@ def conffile_prompt(destFile, prefix=""):
     conffiles = ""
     for section in tagfile:
         if section.get("Package") == pkgname:
-            logging.debug("found pkg: %s" % pkgname)
+            logging.debug(u"found pkg: %s" % pkgname)
             if "Conffiles" in section:
                 conffiles = section.get("Conffiles")
                 break
@@ -538,7 +538,7 @@ def conffile_prompt(destFile, prefix=""):
         pkg_conffiles = deb.control.extractdata("conffiles").strip().decode(
             "utf-8")
     except LookupError as e:
-        logging.debug("No conffiles in deb '%s' (%s)" % (destFile, e))
+        logging.debug(u"No conffiles in deb '%s' (%s)" % (destFile, e))
 
     # Conffiles:
     #  /etc/bash_completion.d/m-a c7780fab6b14d75ca54e11e992a6c11c
@@ -549,7 +549,7 @@ def conffile_prompt(destFile, prefix=""):
         if not line:
             continue
         # show what we do
-        logging.debug("conffile line: '%s'", line)
+        logging.debug(u"conffile line: '%s'", line)
         l = line.split()
         conf_file = l[0]
         md5 = l[1]
@@ -565,7 +565,7 @@ def conffile_prompt(destFile, prefix=""):
         if md5 == "newconffile":
             continue
         if not pkg_conffiles or not conf_file in pkg_conffiles.split("\n"):
-            logging.debug("'%s' not in package conffiles '%s'" % (
+            logging.debug(u"'%s' not in package conffiles '%s'" % (
                 conf_file, pkg_conffiles))
             continue
         # record for later
@@ -573,13 +573,13 @@ def conffile_prompt(destFile, prefix=""):
         # test against the installed file
         with open(prefix + conf_file, 'rb') as fb:
             current_md5 = apt_pkg.md5sum(fb)
-        logging.debug("current md5: %s" % current_md5)
+        logging.debug(u"current md5: %s" % current_md5)
         # hashes are the same, no conffile prompt
         if current_md5 == md5:
             continue
         # calculate md5sum from the deb (may take a bit)
         pkg_md5sum = get_md5sum_for_file_in_deb(destFile, conf_file)
-        logging.debug("pkg_md5sum: %s" % pkg_md5sum)
+        logging.debug(u"pkg_md5sum: %s" % pkg_md5sum)
         # the md5sum in the deb is unchanged, this will not
         # trigger a conffile prompt
         if pkg_md5sum == md5:
@@ -596,7 +596,7 @@ def conffile_prompt(destFile, prefix=""):
         for conf_file in pkg_conffiles.split("\n"):
             if (not conf_file in dpkg_status_conffiles and
                     os.path.exists(prefix + conf_file)):
-                logging.debug("found conffile '%s' in new pkg but on dpkg "
+                logging.debug(u"found conffile '%s' in new pkg but on dpkg "
                               "status" % conf_file)
                 pkg_md5sum = get_md5sum_for_file_in_deb(destFile, conf_file)
                 with open(prefix + conf_file, 'rb') as fp:
@@ -694,7 +694,7 @@ def send_summary_mail(pkgs, res, pkgs_kept_back, mem_log, logfile_dpkg):
     if not to_email:
         return
     if not os.path.exists(MAIL_BINARY) and not os.path.exists(SENDMAIL_BINARY):
-        logging.error(_("No '/usr/bin/mail' or '/usr/sbin/sendmail',"
+        logging.error(_(u"No '/usr/bin/mail' or '/usr/sbin/sendmail',"
                         "can not send mail. "
                         "You probably want to install the 'mailx' package."))
         return
@@ -704,7 +704,7 @@ def send_summary_mail(pkgs, res, pkgs_kept_back, mem_log, logfile_dpkg):
             "Unattended-Upgrade::MailOnlyOnError", False)):
         return
     # Check if reboot-required flag is present
-    logging.debug("Sending mail with '%s' to '%s'" % (logfile_dpkg, to_email))
+    logging.debug(u"Sending mail with '%s' to '%s'" % (logfile_dpkg, to_email))
     if os.path.isfile(REBOOT_REQUIRED_FILE):
         subject = _(
             "[reboot required] unattended-upgrades result for '%s': %s") % (
@@ -743,7 +743,7 @@ def send_summary_mail(pkgs, res, pkgs_kept_back, mem_log, logfile_dpkg):
         raise AssertionError(
             "This should never be reached, if we are here we either "
             "have sendmail or mailx. Please report this as a bug.")
-    logging.debug("mail returned: %s" % ret)
+    logging.debug(u"mail returned: %s" % ret)
 
 
 def do_install(cache, pkgs_to_upgrade, blacklisted_pkgs, options,
@@ -752,7 +752,7 @@ def do_install(cache, pkgs_to_upgrade, blacklisted_pkgs, options,
     os.putenv("DEBIAN_FRONTEND", "noninteractive")
     setup_apt_listchanges()
 
-    logging.info(_("Writing dpkg log to '%s'") % logfile_dpkg)
+    logging.info(_(u"Writing dpkg log to '%s'") % logfile_dpkg)
 
     pkg_install_success = False
     try:
@@ -779,7 +779,7 @@ def do_install(cache, pkgs_to_upgrade, blacklisted_pkgs, options,
         # print unhandled exceptions here this way, while stderr is redirected
         os.write(2, ("Exception: %s\n" % e).encode('utf-8'))
         if options.debug:
-            logging.exception("Exception happened during upgrade.")
+            logging.exception(u"Exception happened during upgrade.")
         pkg_install_success = False
 
     return pkg_install_success
@@ -861,7 +861,7 @@ def reboot_if_requested_and_needed(shutdown_lock=0):
             "Unattended-Upgrade::Automatic-Reboot-Time", "now")
         if shutdown_lock > 0:
             os.close(shutdown_lock)
-        logging.warning("Found %s, rebooting" % REBOOT_REQUIRED_FILE)
+        logging.warning(u"Found %s, rebooting" % REBOOT_REQUIRED_FILE)
         # XXX: add time option
         subprocess.call(["/sbin/shutdown", "-r", when])
 
@@ -880,12 +880,12 @@ def main(options, rootdir=""):
 
     # pkgs that are (for some reason) not save to install
     blacklisted_pkgs = get_blacklisted_pkgs()
-    logging.info(_("Initial blacklisted packages: %s"),
+    logging.info(_(u"Initial blacklisted packages: %s"),
                  " ".join(blacklisted_pkgs))
-    logging.info(_("Starting unattended upgrades script"))
+    logging.info(_(u"Starting unattended upgrades script"))
 
     # display available origin
-    logging.info(_("Allowed origins are: %s") % allowed_origins)
+    logging.info(_(u"Allowed origins are: %s") % allowed_origins)
 
     # check if the journal is dirty and if so, take emergceny action
     # the alternative is to leave the system potentially unsecure until
@@ -898,7 +898,7 @@ def main(options, rootdir=""):
         lockfd = apt_pkg.get_lock(os.path.join(admindir, "lock"), False)
         if lockfd > 0:
             logging.warning(
-                _("Unclean dpkg state detected, trying to correct"))
+                _(u"Unclean dpkg state detected, trying to correct"))
             print(_("Unclean dpkg state detected, trying to correct"))
             env = copy.copy(os.environ)
             env["DEBIAN_FRONTEND"] = "noninteractive"
@@ -908,16 +908,16 @@ def main(options, rootdir=""):
                     ["dpkg", "--force-confold", "--configure", "-a"], env=env)
             except subprocess.CalledProcessError as e:
                 output = e.output
-            logging.warning(_("dpkg --configure -a output:\n%s" % output))
+            logging.warning(_(u"dpkg --configure -a output:\n%s" % output))
         else:
-            logging.debug("Unclean dpkg state, but locked, another package "
+            logging.debug(u"Unclean dpkg state, but locked, another package "
                           "manager working?")
 
     # check and get lock
     try:
         apt_pkg.pkgsystem_lock()
     except SystemError as e:
-        logging.error(_("Lock could not be acquired (another package "
+        logging.error(_(u"Lock could not be acquired (another package "
                         "manager running?)"))
         print(_("Cache lock can not be acquired, exiting"))
         sys.exit(1)
@@ -927,7 +927,7 @@ def main(options, rootdir=""):
                                     allowed_origins=allowed_origins)
     if cache._depcache.broken_count > 0:
         print(_("Cache has broken packages, exiting"))
-        logging.error(_("Cache has broken packages, exiting"))
+        logging.error(_(u"Cache has broken packages, exiting"))
         sys.exit(1)
     # speed things up with latest apt
     actiongroup = apt_pkg.ActionGroup(cache._depcache)
@@ -942,7 +942,7 @@ def main(options, rootdir=""):
     # now do the actual upgrade
     for pkg in cache:
         if options.debug and pkg.is_upgradable:
-            logging.debug("Checking: %s (%s)" % (
+            logging.debug(u"Checking: %s (%s)" % (
                 pkg.name, getattr(pkg.candidate, "origins", [])))
         if (pkg.is_upgradable and
                 not is_pkgname_in_blacklist(pkg.name, blacklisted_pkgs) and
@@ -962,20 +962,20 @@ def main(options, rootdir=""):
                             pkgs_kept_back.remove(pkgname)
                             pkgs_to_upgrade.append(cache[pkgname])
                 else:
-                    logging.debug("sanity check failed")
+                    logging.debug(u"sanity check failed")
                     rewind_cache(cache, pkgs_to_upgrade)
                     pkgs_kept_back.append(pkg.name)
             except SystemError as e:
                 # can't upgrade
                 logging.warning(
-                    _("package '%s' upgradable but fails to "
+                    _(u"package '%s' upgradable but fails to "
                       "be marked for upgrade (%s)") % (pkg.name, e))
                 rewind_cache(cache, pkgs_to_upgrade)
                 pkgs_kept_back.append(pkg.name)
 
     pkgs_to_upgrade.sort(key=lambda p: p.name)
     pkgs = "\n".join([pkg.name for pkg in pkgs_to_upgrade])
-    logging.debug("pkgs that look like they should be upgraded: %s" % pkgs)
+    logging.debug(u"pkgs that look like they should be upgraded: %s" % pkgs)
 
     # download what looks good
     if options.debug:
@@ -989,28 +989,28 @@ def main(options, rootdir=""):
     try:
         pm.get_archives(fetcher, list, recs)
     except SystemError as e:
-        logging.error(_("GetArchives() failed: '%s'") % e)
+        logging.error(_(u"GetArchives() failed: '%s'") % e)
     res = fetcher.run()
-    logging.debug("fetch.run() result: %s" % res)
+    logging.debug(u"fetch.run() result: %s" % res)
 
     if dpkg_conffile_prompt():
         # now check the downloaded debs for conffile conflicts and build
         # a blacklist
         for item in fetcher.items:
-            logging.debug("%s" % item)
+            logging.debug(u"%s" % item)
             if item.status == item.STAT_ERROR:
                 print(_("An error occurred: '%s'") % item.error_text)
-                logging.error(_("An error occurred: '%s'") % item.error_text)
+                logging.error(_(u"An error occurred: '%s'") % item.error_text)
             if not item.complete:
                 print(_("The URI '%s' failed to download, aborting") %
                       item.desc_uri)
-                logging.error(_("The URI '%s' failed to download, aborting") %
+                logging.error(_(u"The URI '%s' failed to download, aborting") %
                               item.desc_uri)
                 sys.exit(1)
             if not os.path.exists(item.destfile):
                 print(_("Download finished, but file '%s' not there?!?" %
                         item.destfile))
-                logging.error("Download finished, but file '%s' not "
+                logging.error(u"Download finished, but file '%s' not "
                               "there?!?" % item.destfile)
                 sys.exit(1)
             if not item.is_trusted:
@@ -1028,7 +1028,7 @@ def main(options, rootdir=""):
                             "to be upgraded manually") %
                           pkgname_from_deb(item.destfile))
                 # log to the logfile
-                logging.warning(_("Package '%s' has conffile prompt and "
+                logging.warning(_(u"Package '%s' has conffile prompt and "
                                   "needs to be upgraded manually") %
                                 pkgname_from_deb(item.destfile))
                 blacklisted_pkgs.append(pkgname_from_deb(item.destfile))
@@ -1036,14 +1036,14 @@ def main(options, rootdir=""):
 
         # redo the selection about the packages to upgrade based on the new
         # blacklist
-        logging.debug("blacklist: %s" % blacklisted_pkgs)
+        logging.debug(u"blacklist: %s" % blacklisted_pkgs)
         # find out about the packages that are upgradable (in a allowed_origin)
         if len(blacklisted_pkgs) > 0:
             cache.clear()
             old_pkgs_to_upgrade = pkgs_to_upgrade[:]
             pkgs_to_upgrade = []
             for pkg in old_pkgs_to_upgrade:
-                logging.debug("Checking (blacklist): %s" % (pkg.name))
+                logging.debug(u"Checking (blacklist): %s" % (pkg.name))
                 pkg.mark_upgrade()
                 if check_changes_for_sanity(cache, allowed_origins,
                                             blacklisted_pkgs):
@@ -1051,12 +1051,12 @@ def main(options, rootdir=""):
                 else:
                     if not (pkg.name in pkgs_kept_back):
                         pkgs_kept_back.append(pkg.name)
-                    logging.info(_("package '%s' not upgraded") % pkg.name)
+                    logging.info(_(u"package '%s' not upgraded") % pkg.name)
                     cache.clear()
                     for pkg2 in pkgs_to_upgrade:
                         pkg2.mark_upgrade()
     else:
-        logging.debug("dpkg is configured not to cause conffile prompts")
+        logging.debug(u"dpkg is configured not to cause conffile prompts")
 
     # do auto-remove
     if apt_pkg.config.find_b(
@@ -1064,18 +1064,18 @@ def main(options, rootdir=""):
         now_auto_removable = set([pkg.name for pkg in cache
                                   if pkg.is_auto_removable])
         for pkgname in now_auto_removable - pkgs_auto_removable:
-            logging.debug("marking %s for remove" % pkgname)
+            logging.debug(u"marking %s for remove" % pkgname)
             cache[pkgname].mark_delete()
-        logging.info(_("Packages that are auto removed: '%s'") %
+        logging.info(_(u"Packages that are auto removed: '%s'") %
                      " ".join(now_auto_removable - pkgs_auto_removable))
 
-    logging.debug("InstCount=%i DelCount=%i BrokenCount=%i" % (
+    logging.debug(u"InstCount=%i DelCount=%i BrokenCount=%i" % (
         cache._depcache.inst_count, cache._depcache.del_count,
         cache._depcache.broken_count))
 
     # exit if there is nothing to do and nothing to report
     if (len(pkgs_to_upgrade) == 0) and (len(pkgs_kept_back) == 0):
-        logging.info(_("No packages found that can be upgraded unattended"))
+        logging.info(_(u"No packages found that can be upgraded unattended"))
         return
 
     # check if its configured for install on shutdown, if so, the
@@ -1085,17 +1085,17 @@ def main(options, rootdir=""):
             apt_pkg.config.find_b(
                 "Unattended-Upgrade::InstallOnShutdown", False)):
         logger = logging.getLogger()
-        logger.debug("Configured to install on shutdown, so exiting now")
+        logger.debug(u"Configured to install on shutdown, so exiting now")
         return
 
     # check if we are in dry-run mode
     if options.dry_run:
-        logging.info("Option --dry-run given, *not* performing real actions")
+        logging.info(u"Option --dry-run given, *not* performing real actions")
         apt_pkg.config.set("Debug::pkgDPkgPM", "1")
 
     # do the install based on the new list of pkgs
     pkgs = " ".join([pkg.name for pkg in pkgs_to_upgrade])
-    logging.info(_("Packages that will be upgraded: %s" % pkgs))
+    logging.info(_(u"Packages that will be upgraded: %s" % pkgs))
 
     # get log
     now = datetime.datetime.now()
