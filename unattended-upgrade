@@ -80,7 +80,8 @@ class UnattendedUpgradesCache(apt.Cache):
         self.allowed_origins = allowed_origins
         # ensure we update the candidate versions
         self.upgradable = []
-        for pkg in self:
+        upgradable = apt.Cache.get_upgradable(self)
+        for pkg in upgradable:
             self.adjust_candidate_version(pkg)
             if pkg.is_upgradable and pkg.is_installed:
                 self.upgradable.append(pkg)
