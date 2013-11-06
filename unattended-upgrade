@@ -79,43 +79,46 @@ class UnattendedUpgradesCache(apt.Cache):
         apt.Cache.__init__(self, rootdir=rootdir)
         self.allowed_origins = allowed_origins
         # ensure we update the candidate versions
-        self.adjust_candidate_versions()
+        for pkg in self:
+            self.adjust_candidate_version(pkg)
 
     def clear(self):
         apt.Cache.clear(self)
         # ensure we update the candidate versions
-        self.adjust_candidate_versions()
+        for pkg in self:
+            self.adjust_candidate_version(pkg)
 
-    def adjust_candidate_versions(self):
-        """ Adjust candidate versions to match highest allowed origin
+    def adjust_candidate_version(self, pkg):
+        """ Adjust candidate version to match highest allowed origin
 
             This adjusts the origin even if the candidate has a higher
             version
         """
-        for pkg in self:
-            # important! this avoids downgrades below
-            if not pkg.is_upgradable:
+        # important! this avoids downgrades below
+        if not pkg.is_upgradable and not pkg.is_installed:
+            return False
+        # check if the candidate is already pointing to a allowed
+        # origin and if so, do not mess with it
+        if is_allowed_origin(pkg.candidate, self.allowed_origins):
+            return False
+        # check if we have a version in a allowed origin that is
+        # not the candidate
+        new_cand = None
+        for ver in pkg.versions:
+            # ignore versions that the user marked with priority < 0
+            # (and ensure we have a python-apt that supports this)
+            if hasattr(ver, "policy_priority") and ver.policy_priority < 0:
+                logging.debug(u"ignoring ver '%s' with priority < 0" % ver)
                 continue
-            # check if the candidate is already pointing to a allowed
-            # origin and if so, do not mess with it
-            if is_allowed_origin(pkg.candidate, self.allowed_origins):
-                continue
-            # check if we have a version in a allowed origin that is
-            # not the candidate
-            new_cand = None
-            for ver in pkg.versions:
-                # ignore versions that the user marked with priority < 0
-                # (and ensure we have a python-apt that supports this)
-                if hasattr(ver, "policy_priority") and ver.policy_priority < 0:
-                    logging.debug(u"ignoring ver '%s' with priority < 0" % ver)
-                    continue
-                if is_allowed_origin(ver, self.allowed_origins):
-                    # leave as soon as we have the highest new candidate
-                    new_cand = ver
-                    break
-            if new_cand and new_cand != pkg.candidate:
-                logging.debug(u"adjusting candidate version: '%s'" % new_cand)
-                pkg.candidate = new_cand
+            if is_allowed_origin(ver, self.allowed_origins):
+                # leave as soon as we have the highest new candidate
+                new_cand = ver
+                break
+        if new_cand and new_cand != pkg.candidate:
+            logging.debug(u"adjusting candidate version: '%s'" % new_cand)
+            pkg.candidate = new_cand
+            return True
+        return False
 
 
 class LogInstallProgress(apt.progress.base.InstallProgress):
