@@ -85,10 +85,10 @@ class UnattendedUpgradesCache(apt.Cache):
             if pkg.is_upgradable and pkg.is_installed:
                 self.upgradable.append(pkg)
 
-    def clear(self):
+    def clear(self, pkglist):
         apt.Cache.clear(self)
         # ensure we update the candidate versions
-        for pkg in self:
+        for pkg in pkglist:
             self.adjust_candidate_version(pkg)
 
     def adjust_candidate_version(self, pkg):
@@ -411,7 +411,7 @@ def upgrade_in_minimal_steps(cache, pkgs_to_upgrade, blacklist,
                 logging.debug(u"found partition of size %s (%s)" % (
                     len(changes), changes))
                 smallest_partition = changes
-            cache.clear()
+            cache.clear(cache)
 
         # write progress log information
         if len(pkgs_to_upgrade) > 0:
@@ -665,7 +665,7 @@ def dpkg_conffile_prompt():
 
 def rewind_cache(cache, pkgs_to_upgrade):
     " set the cache back to the state with packages_to_upgrade "
-    cache.clear()
+    cache.clear(pkgs_to_upgrade)
     for pkg2 in pkgs_to_upgrade:
         pkg2.mark_upgrade(from_user=False)
 
