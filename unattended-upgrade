@@ -86,12 +86,6 @@ class UnattendedUpgradesCache(apt.Cache):
             if pkg.is_upgradable and pkg.is_installed:
                 self.upgradable.append(pkg)
 
-    def clear(self, pkglist):
-        apt.Cache.clear(self)
-        # ensure we update the candidate versions
-        for pkg in pkglist:
-            self.adjust_candidate_version(pkg)
-
     def adjust_candidate_version(self, pkg):
         """ Adjust candidate version to match highest allowed origin
 
